@@ -140,8 +140,16 @@ def tune_lightgbm(X, y, groups, param_distributions=None, n_iter=20, n_splits_se
     y = np.asarray(y)
     groups = np.asarray(groups)
 
+    # The search phase uses a capped n_estimators (not the full final value) with
+    # no early stopping wired in, since RandomizedSearchCV does not pass a per-fold
+    # validation set to fit(). Running the full n_estimators on every one of
+    # n_iter * n_splits_search fits is the dominant cost of this function; capping
+    # it here keeps the search a relative ranking of configurations, not a fully
+    # trained ensemble, and is the fix for the slow search runtime.
+    search_n_estimators = min(n_estimators, 300)
     base = lgb.LGBMClassifier(
-        n_estimators=n_estimators, random_state=random_state, verbosity=-1
+        n_estimators=search_n_estimators, random_state=random_state, verbosity=-1,
+        n_jobs=1,  # avoid nested parallelism contention with RandomizedSearchCV's n_jobs
     )
     gkf_search = GroupKFold(n_splits=n_splits_search)
 
