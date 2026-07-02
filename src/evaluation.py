@@ -17,7 +17,6 @@ def mean_per_user_f1(user_ids, y_true, y_pred):
     tp, fp, fn = g["tp"].values, g["fp"].values, g["fn"].values
 
     denom = 2 * tp + fp + fn
-    # denom == 0 means the user had no positives and none were predicted: F1 = 1.0
     f1 = np.where(denom == 0, 1.0, 2 * tp / np.where(denom == 0, 1, denom))
     return float(f1.mean())
 
