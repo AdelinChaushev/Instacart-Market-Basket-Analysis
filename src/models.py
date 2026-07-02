@@ -15,7 +15,9 @@ import pandas as pd
 import lightgbm as lgb
 from sklearn.model_selection import GroupKFold, RandomizedSearchCV
 from sklearn.base import clone
-
+import json
+import pickle
+from pathlib import Path
 from evaluation import mean_per_user_f1, search_threshold
 
 
@@ -211,9 +213,7 @@ def save_model_artifacts(model_dir, model, model_kind, feature_cols, threshold, 
     Path
         The model_dir that was written to.
     """
-    import json
-    import pickle
-    from pathlib import Path
+
 
     model_dir = Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
@@ -252,3 +252,51 @@ def save_model_artifacts(model_dir, model, model_kind, feature_cols, threshold, 
     print(f"  mean_f1: {cv_results_clean['mean_f1']:.4f}")
 
     return model_dir
+
+
+def load_model_artifacts(model_dir, model_kind):
+    """
+    Reload a model and its metadata saved by save_model_artifacts.
+
+    Parameters
+    ----------
+    model_dir : str or Path
+        Directory written by save_model_artifacts (e.g. models/lgbm_v1/).
+    model_kind : str
+        One of "lightgbm", "sklearn", "torch", matching how it was saved.
+        (torch requires the caller to pass a model instance to load_state_dict
+        into; only "lightgbm" and "sklearn" reload the full object directly.)
+
+    Returns
+    -------
+    dict
+        model : the reloaded model (Booster for lightgbm, estimator for sklearn)
+        feature_cols : list of feature names in training order
+        threshold : the saved decision threshold
+        cv_scores : the saved cross-validation results dict
+    """
+
+
+    model_dir = Path(model_dir)
+
+    if model_kind == "lightgbm":
+        model = lgb.Booster(model_file=str(model_dir / "model.txt"))
+    elif model_kind == "sklearn":
+        with open(model_dir / "model.pkl", "rb") as f:
+            model = pickle.load(f)
+    else:
+        raise ValueError(f"load_model_artifacts supports 'lightgbm'/'sklearn'; got {model_kind}")
+
+    with open(model_dir / "features.json") as f:
+        feature_cols = json.load(f)["feature_cols"]
+    with open(model_dir / "threshold.json") as f:
+        threshold = json.load(f)["threshold"]
+    with open(model_dir / "cv_scores.json") as f:
+        cv_scores = json.load(f)
+
+    return {
+        "model": model,
+        "feature_cols": feature_cols,
+        "threshold": threshold,
+        "cv_scores": cv_scores,
+    }
